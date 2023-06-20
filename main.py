@@ -1,43 +1,62 @@
 # coding=utf-8
 import math
+import time
 
-from Utils import generate_center_map, recover_pickle_data, convert_frame, save_pickle_data, select_features, \
-    generate_cluster_map
-from cluster import kmeans_clustering, DBSCAN_clustering, kmeans_plus_clustering
-from pre_process import gain_preprocess_data
+from sklearn.cluster import KMeans, DBSCAN
+
+from data_loader import data_loader
+from pre_process import gain_preprocess_data, convert_raw_data
+from result_analysis import clustering_analysis
 
 # 读取数据并且转换格式
-# convert_raw_data("data/lng2.csv", "data/real_lng.csv")
+convert_raw_data("data/lng.csv", "data/real_lng.csv")
 
 # 进行数据预处理
-data = gain_preprocess_data("data/real_lng.csv")
-save_pickle_data(data, 'data/roaming/data.pkl')
-print("[log] 原数据格式为: " + str(data.shape))
+selected_moored_data = gain_preprocess_data("data/real_lng.csv")
+loader = data_loader("data/selected_moored_data.csv")
+data, coord = loader.load()
 
-# 选取特征向量
-features = ['longitude', 'latitude']
-data, feature_vector = select_features(data,features)
+#使用DBSCAN算法聚合数据
+start = time.time()
+clustering_dbscan = DBSCAN(eps=0.05, min_samples=3).fit(coord)
+end = time.time()
+dic = clustering_analysis(clustering_dbscan, data, "DBSCAN", filename="lng_results_list(DBSCAN).json")
+print("DBSCAN")
+print("总数: ", len(clustering_dbscan.labels_))
+print("聚类中心点数: ", len(set(clustering_dbscan.labels_)) - (1 if -1 in clustering_dbscan.labels_ else 0))
+print()
+print("其中，")
+print("\tLNG出口点有: ", len(dic["export"]), "个")
+print("\tLNG出口点有: ", len(dic["import"]), "个")
+print("\t停泊点有: ", len(dic["mooring"]), "个")
+print("耗时：", end - start, "秒")
 
-# 计算聚类簇的数量
-n_clusters: int = int(math.sqrt(feature_vector.shape[0] / 2))
-n_init = 20
-print("[log] 聚类数量：", n_clusters, "个")
+#使用K-means算法聚合数据
+start = time.time()
+clustering_kmeans = KMeans(n_clusters=400, init='random').fit(coord)
+end = time.time()
+dic = clustering_analysis(clustering_kmeans, data, "K-means", filename="lng_results_list(K-means).json")
+print("K-means")
+print("总数: ", len(clustering_kmeans.labels_))
+print("聚类中心点数: ", len(clustering_kmeans.cluster_centers_))
+print()
+print("其中，")
+print("\tLNG出口点有: ", len(dic["export"]), "个")
+print("\tLNG出口点有: ", len(dic["import"]), "个")
+print("\t停泊点有: ", len(dic["mooring"]), "个")
+print("耗时：", end - start, "秒")
 
-# K-means 聚类
-kmeans = kmeans_clustering(feature_vector, n_clusters, n_init)
-# kmeans = recover_pickle_data('models/kmeans_model_1647_20.pkl')
-centers = kmeans.cluster_centers_
-centers_frame = convert_frame(centers, ['longitude', 'latitude'])
-generate_center_map(centers_frame, "maps/kmeans.html")
-
-# K-means++ 聚类
-kmeans = kmeans_plus_clustering(feature_vector, n_clusters, n_init)
-# kmeans = recover_pickle_data('models/kmeans_model_1647_20.pkl')
-centers = kmeans.cluster_centers_
-centers_frame = convert_frame(centers, ['longitude', 'latitude'])
-generate_center_map(centers_frame, "maps/kmeans_plus.html")
-
-# DBSCAN聚类
-dbscan = DBSCAN_clustering(feature_vector, 0.05, 3)
-# dbscan = recover_pickle_data('models/dbscan_model_0.05_20.3')
-generate_cluster_map(dbscan, feature_vector, "maps/dbscan.html")
+#使用K-means++算法聚合数据
+start = time.time()
+clustering_kmeanspp = KMeans(n_clusters=600, init='k-means++').fit(coord)
+end = time.time()
+dic = clustering_analysis(clustering_kmeanspp, data, "K-means++", filename="lng_results_list(K-means++).json")
+print("K-means++")
+print("总数: ", len(clustering_kmeanspp.labels_))
+print("聚类中心点数: ", len(clustering_kmeanspp.cluster_centers_))
+print()
+print("其中，")
+print("\tLNG出口点有: ", len(dic["export"]), "个")
+print("\tLNG出口点有: ", len(dic["import"]), "个")
+print("\t停泊点有: ", len(dic["mooring"]), "个")
+print("耗时：", end - start, "秒")
